@@ -2,14 +2,15 @@ import pygame
 import random
 from enum import Enum
 from collections import namedtuple
+from abc import ABC, abstractmethod
 
 WHITE = (255, 255, 255)
 RED = (200, 0, 0)
-BLUE = (0, 0, 255)
+GREEN = (0, 128, 0)
 BLACK = (0, 0, 0)
 
-UNIT_SIZE = 20
-SPEED = 20
+UNIT_SIZE = 20 # pixel size of each game block
+SPEED = 2000
 
 DIMENSIONS = {
     'width': 640,
@@ -31,16 +32,34 @@ EVENTS = {
     pygame.K_DOWN: Direction.DOWN
 }
 
-class Game:
+class Game(ABC):
     """
-    A class used to implement game window and rules.
+    An abstract pygame class used to encapsulate methods that should be implemented in subclasses.
+    """
+    @abstractmethod
+    def get_player(self):
+        pass
+
+    @abstractmethod
+    def get_target_object(self):
+        pass
+
+    @abstractmethod
+    def is_point_acquired(self):
+        pass
+
+    @abstractmethod
+    def is_collision(self):
+        pass
+
+class SnakeGame(Game):
+    """
+    A class used to implement snake game rules.
 
     Attributes
     ----------
-    width : int
-        width of the screen
-    height : int
-        height of the screen
+    screen: UI
+        pygame UI screen
     snake : list
         list of points that represent a snake
     head : Point
@@ -51,132 +70,211 @@ class Game:
         direction of the snake
     food: Point
         food placement
+    iteration: int
+        current frame iteration index, starts at 0
     """
 
+    def __init__(self, screen):
+        self._screen = screen
+        self.restart()
+        
+    def restart(self):
+        '''
+        Restarts the game back to initial state.
+        '''
+        center = Point(self._screen.width / 2, self._screen.height / 2)
+        self.direction = Direction.RIGHT
+        
+        self.score = 0
+        self._head = center
+        self._snake = [
+            self._head, 
+            Point(self._head.x - UNIT_SIZE, self._head.y),
+            Point(self._head.x - (2 * UNIT_SIZE), self._head.y)
+        ]
+        
+        self._place_target()
+        self._iteration = 0
+
+
+    def get_player(self):
+        '''
+        Gets points position of current snake.
+
+        Returns:
+            snake (list): position of snake
+        '''
+        return self._snake
+
+    def get_target_object(self):
+        '''
+        Gets point position of current food spot.
+
+        Returns:
+            food (Point): position of food
+        '''
+        return self._food
+        
+    def get_snake_head(self):
+        '''
+        Gets point position of current snake head.
+
+        Returns:
+            head (Point): position of snake head
+        '''
+        return self._snake[0]
+        
+    def is_point_acquired(self):
+        '''
+        Checks if snake ate food.
+        '''
+        return self._head == self._food
+
+
+    def play_step(self, action):
+        '''
+        Plays one game step of moving snake in certain direction and updating
+        its size, food placement, score and UI.
+
+        Parameters:
+            action (list): an action to take
+        '''
+
+        self._iteration += 1
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                quit()
+
+        self._step(action)
+        self._snake.insert(0, self._head)
+        
+        if self.is_collision() or self._is_stuck():
+            return True, self.score, -10
+
+        reward = 0
+        if self.is_point_acquired():
+            self.score += 1
+            reward = 10
+            self._place_target()
+        else:
+            self._snake.pop()
+        
+        self._screen.update()
+
+        return False, self.score, reward
+
+
+    def _place_target(self):
+        '''
+        Places food randomly in environment.
+        If food placement happens to be on the snake, it repeats the process.
+        '''
+        self._food = Point(random.randint(0, (self._screen.width - UNIT_SIZE ) // UNIT_SIZE ) * UNIT_SIZE , random.randint(0, (self._screen.height - UNIT_SIZE ) // UNIT_SIZE ) * UNIT_SIZE)
+        if self._food in self._snake:
+            self._place_target()
+        
+    
+    def _is_stuck(self):
+        '''
+        Checks if player (snake) is stuck in a loop
+        '''
+        return self._iteration > 100 * len(self._snake)
+
+
+    def is_collision(self, point=None):
+        '''
+        Checks if snake collided with itself or boundary of screen.
+
+        Parameters:
+            point (Point): a point to check for collision
+        '''
+        if not point:
+            point = self._head
+
+        # check if snake hit itself
+        if point in self._snake[1:]:
+            return True
+
+        # check if snake hit boundary
+        if point.x > self._screen.width - UNIT_SIZE or point.x < 0 or point.y > self._screen.height - UNIT_SIZE or point.y < 0:
+            return True
+        
+        return False
+
+    def _step(self, action):
+        '''
+        Moves snake head in certain direction.
+
+        Parameters:
+            action (list): determines direction that should be taken
+        '''
+
+        directions = [Direction.RIGHT, Direction.DOWN, Direction.LEFT ,Direction.UP]
+        current_direction_index = directions.index(self.direction)
+
+        if action == [1, 0, 0]: # stay same
+            new_direction = directions[current_direction_index]
+        elif action == [0, 1, 0]: # rotate right
+            current_direction_index = (current_direction_index + 1) % 4
+            new_direction = directions[current_direction_index]
+        elif action == [0, 0, 1]: # rotate left
+            current_direction_index = (current_direction_index - 1) % 4
+            new_direction = directions[current_direction_index]
+
+        self.direction = new_direction
+
+        x = self._head.x
+        y = self._head.y
+        if self.direction == Direction.RIGHT:
+            x += UNIT_SIZE
+        elif self.direction == Direction.LEFT:
+            x -= UNIT_SIZE
+        elif self.direction == Direction.DOWN:
+            y += UNIT_SIZE
+        elif self.direction == Direction.UP:
+            y -= UNIT_SIZE
+            
+        self._head = Point(x, y)
+
+
+class UI:
+    """
+    A class used to represent pygame UI.
+
+    Attributes
+    ----------
+    width : int
+        width of the screen
+    height : int
+        height of the screen
+    """
     def __init__(self):
         self.width = DIMENSIONS['width']
         self.height = DIMENSIONS['height']
 
         self.display = pygame.display.set_mode((self.width, self.height))
 
-        center = Point(self.width / 2, self.height / 2)
         pygame.display.set_caption('Snake')
         self.clock = pygame.time.Clock()
-        
-        self.direction = Direction.RIGHT
-        
-        self.score = 0
-        self.head = center
-        self.snake = [
-            self.head, 
-            Point(self.head.x - UNIT_SIZE, self.head.y),
-            Point(self.head.x - (2 * UNIT_SIZE), self.head.y)
-        ]
-        
-        self._place_food()
-        
 
-    def play_step(self):
+    def set_game(self, game):
         '''
-        Plays one game step of moving snake in certain direction and updating
-        its size, food placement, score and UI.
+        Sets game that will be played on screen.
         '''
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                quit()
-            
-            # if key was pressed
-            if event.type == pygame.KEYDOWN and event.key in EVENTS:
-                self.direction = EVENTS[event.key]
-        
+        self.game = game
 
-        self._step(self.direction)
-        self.snake.insert(0, self.head)
-        
-        game_over = False
-        if self._is_collision():
-            game_over = True
-            return game_over, self.score
-            
-        if self.head == self.food:
-            self.score += 1
-            self._place_food()
-        else:
-            self.snake.pop()
-        
-        self._update_screen()
-        self.clock.tick(SPEED)
-
-        return game_over, self.score
-
-
-    def _place_food(self):
+    def update(self):
         '''
-        Places food randomly in environment.
-        If food placement happens to be on the snake, it repeats the process.
-        '''
-        self.food = Point(random.randint(0, (self.width - UNIT_SIZE ) // UNIT_SIZE ) * UNIT_SIZE , random.randint(0, (self.height - UNIT_SIZE ) // UNIT_SIZE ) * UNIT_SIZE)
-        if self.food in self.snake:
-            self._place_food()
-    
-
-    def _is_collision(self):
-        '''
-        Checks if snake collided with itself or boundary of screen.
-        '''
-        # check if snake hit itself
-        if self.head in self.snake[1:]:
-            return True
-
-        # check if snake hit boundary
-        if self.head.x > self.width - UNIT_SIZE or self.head.x < 0 or self.head.y > self.height - UNIT_SIZE or self.head.y < 0:
-            return True
-        
-        return False
-
-    def _step(self, direction):
-        '''
-        Moves snake head in certain direction.
-        '''
-        x = self.head.x
-        y = self.head.y
-        if direction == Direction.RIGHT:
-            x += UNIT_SIZE
-        elif direction == Direction.LEFT:
-            x -= UNIT_SIZE
-        elif direction == Direction.DOWN:
-            y += UNIT_SIZE
-        elif direction == Direction.UP:
-            y -= UNIT_SIZE
-            
-        self.head = Point(x, y)
-
-    
-    def _update_screen(self):
-        '''
-        Updates screen based on new snake and food position.
+        Updates screen based on new game object and target position.
         '''
         self.display.fill(BLACK)
-        
-        for pt in self.snake:
-            pygame.draw.rect(self.display, BLUE, pygame.Rect(pt.x, pt.y, UNIT_SIZE, UNIT_SIZE))
+
+        for point in self.game.get_player():
+            pygame.draw.rect(self.display, GREEN, pygame.Rect(point.x, point.y, UNIT_SIZE, UNIT_SIZE))
             
-        pygame.draw.rect(self.display, RED, pygame.Rect(self.food.x, self.food.y, UNIT_SIZE, UNIT_SIZE))
+        pygame.draw.rect(self.display, RED, pygame.Rect(self.game.get_target_object().x, self.game.get_target_object().y, UNIT_SIZE, UNIT_SIZE))
         
         pygame.display.flip()
-            
 
-if __name__ == '__main__':
-    pygame.init()
-
-    game = Game()
-    
-    end = False
-    while not end:
-        end, score = game.play_step()
-        
-    print('Game Score', score)
-        
-        
-    pygame.quit()
+        self.clock.tick(SPEED)
