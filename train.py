@@ -131,11 +131,38 @@ class QTrain:
         return model
 
 
+    def plot_training(self, scores, mean_scores):
+        if not self.fig or not self.ax:
+            plt.ion()
+
+            self.fig = plt.figure(figsize=(13,6))
+            self.ax = self.fig.add_subplot(111)
+
+
+            line1, = self.ax.plot(range(1, len(scores) + 1), scores,'-o', alpha=0.8)
+            line2, = self.ax.plot(range(1, len(mean_scores) + 1), mean_scores, '-o', alpha=0.8) 
+
+            plt.ylabel('Score')
+            plt.xlabel('Number of Games')
+            plt.title('Training')
+
+            plt.show()
+            plt.pause(0.1)
+        else:
+            # update
+
+            line1, = self.ax.plot(range(1, len(scores) + 1), scores,'-o', alpha=0.8)
+            line2, = self.ax.plot(range(1, len(mean_scores) + 1), mean_scores, '-o', alpha=0.8) 
+
+            plt.pause(0.1)
+    
+
+
 if __name__ == '__main__':
     scores = []
     mean_scores = []
     total_score = 0
-    maximum_score = 0
+    maximum_score = 11
 
     screen = UI()
     game = SnakeGame(screen)
@@ -174,3 +201,4 @@ if __name__ == '__main__':
             total_score += score
             mean_score = total_score / agent.num_of_games
             mean_scores.append(mean_score)
+            train.plot_training(scores, mean_scores)
