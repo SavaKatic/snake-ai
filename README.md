@@ -34,7 +34,7 @@ If the snake eats food, it's score increases by 1 and the size by one as well.
 To solve the problem, **Deep Q Learning** approach is used. In this approach, I
  use a neural network to approximate the Q-value function. The state is given as the input and the Q-values of all possible actions are generated as the output of the network. Neural network implementation can be seen in `models.py` file, and the architecture overview on the image below:
 
-![Deep Q Learning](./assets/deepqlearning.png)
+![Deep Q Learning](./assets/deepqlearning.PNG)
 
 Since the state can hold 11 values and actions 3, these are the input and output sizes of the layers in the neural network as well.
 
@@ -72,7 +72,7 @@ After 200 game iterations:
 
 Following picture displays a graph of how score progressed as number of games that agent played increased:
 
-![Training graph](./assets/graph.png)
+![Training graph](./assets/graph.PNG)
 
 The green line displays how score changed, and the red one how mean score up until that point changed.
 
